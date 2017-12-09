@@ -17,7 +17,10 @@
   },
   "homepage": "https://github.com/cellularatomaton/cryptelligence#readme",
   "dependencies": {
-    "gdax": "^0.4.2",
+    "colors": "^1.1.2",
+    "gdax": "github:coinbase/gdax-node",
+    "lodash": "^4.17.4",
+    "natural": "^0.5.4",
     "twitter": "^1.7.1"
   }
 }
