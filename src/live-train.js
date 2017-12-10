@@ -27,12 +27,12 @@ const websocket = new Gdax.WebsocketClient(PRODS, URI, AUTH, OPTS);
 const trackers = [];
 let sample_count = 0;
 let training = false;
-
+let tweet_stream = null;
 websocket.on('open', function(){
     console.log('Websocket opened.');
-    twitter_client.createTweetStream(
+    tweet_stream = twitter_client.createTweetStream(
         process.env.TWITTER_SCREEN_NAME, 
-        class_config.slug, 
+        null, 
         class_config.filters,
         function(tweet_error, tweet){
             if(tweet_error){
@@ -56,6 +56,7 @@ websocket.on('open', function(){
 
 websocket.on('message', function(data) { 
     if(data.type === 'ticker'){
+        utils.logTicker(data);
         trackers.forEach(function(tracker){
             if(!tracker.open){
                 tracker.open = data.price;
@@ -68,8 +69,9 @@ websocket.on('message', function(data) {
             }else{
                 tracker.sell_volume += data.last_size;
             }
-            // console.log(`Ticker timestamp: ${data.time} (${utils.getEpochTime(data.time)})`)
+            // console.log(`Ticker timestamp: ${data.time} (${utils.getEpochTime(data.time)})`);
             tracker.last_ticker_ts = utils.getEpochTime(data.time);
+            
         });
         const finished_trackers = _.remove(trackers, function(t){
             // console.log(`Timestamps:  Ticker(${t.last_ticker_ts}), Tweet(${t.tweet_ts})`)
@@ -90,6 +92,7 @@ websocket.on('message', function(data) {
         if(class_config.sample_size < sample_count && !training){
             training = true;
             websocket.disconnect();
+            tweet_stream.destroy();
             classifier.train();
             const output_path = `${config.data_dir}/${class_config.output}`;
             classifier.save(output_path, function(err, classifier) {

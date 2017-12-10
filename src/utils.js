@@ -61,7 +61,16 @@ const logClassResult = function(text, result){
     }else if(result === 'FOMO_BUY'){
         t = t.green;
     }else{
-        t = t.rainbow;
+        t = t.grey;
+    }
+    console.log(t);
+}
+const logTicker = function(ticker){
+    let t = `${ticker.time} ${ticker.side} ${ticker.last_size} @ ${ticker.price}`;
+    if(ticker.side === 'buy'){
+        t = t.green;
+    }else{
+        t = t.red;
     }
     console.log(t);
 }
@@ -76,4 +85,5 @@ module.exports = {
     classifyCandle: classifyCandle,
     classifyTracker: classifyTracker,
     logClassResult: logClassResult,
+    logTicker: logTicker
 }
