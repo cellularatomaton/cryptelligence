@@ -31,21 +31,32 @@ const classifyCandle = function(candle, min_volume, max_volume, config){
     }
 }
 const classifyTracker = function(t, config){
-    t.tweet_text;
-    t.tweet_ts;
-    t.last_ticker_ts;
-    t.open;
-    t.high;
-    t.low;
-    t.close;
-    t.buy_volume;
-    t.sell_volume;
-    const flow = config.flow_gain < Math.min(t.buy_volume, t.sell_volume) / Math.max(t.buy_volume, t.sell_volume);
-    const dildo = config.dildo_gain < Math.abs(t.close - t.open) / Math.abs(t.high - t.low);
+    // t.tweet_text;
+    // t.tweet_ts;
+    // t.last_ticker_ts;
+    // t.open;
+    // t.high;
+    // t.low;
+    // t.close;
+    // t.buy_volume;
+    // t.sell_volume;
+    let flow = 0;
+    const flow_denominator = Math.max(t.buy_volume, t.sell_volume);
+    if(flow_denominator !== 0){
+        const flow_measurement = 1 - (Math.min(t.buy_volume, t.sell_volume) / flow_denominator);
+        console.log(`Flow: Denominator ${flow_denominator}, Measurement ${flow_measurement}`);
+        flow = config.flow_gain < flow_measurement;
+    }
+    let dildo = 0;
+    const dildo_measurement = Math.abs(t.close - t.open) / Math.abs(t.high - t.low);
+    if(t.high !== t.low){
+        dildo = config.dildo_gain < dildo_measurement;
+    }
     const closedUp = t.open < t.close;
     const closedDown = t.close < t.open;
     const fomoBuy = dildo && closedUp && flow;
     const fomoSell = dildo && closedDown && flow;
+    console.log(`Closed Up? ${closedUp}, Closed Down? ${closedDown}, Dildo ${dildo_measurement}`);
     if(fomoBuy){
         return 'FOMO_BUY';
     }else if(fomoSell){

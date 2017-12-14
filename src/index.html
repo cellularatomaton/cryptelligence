@@ -1,0 +1,361 @@
+<html>
+    <head>
+        <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+        <script src="https://code.highcharts.com/stock/highstock.js"></script>
+        <script src="https://code.highcharts.com/stock/modules/drag-panes.js"></script>
+        <script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+        <script src="https://code.highcharts.com/js/themes/gray.js"></script>
+        <style>
+            .Full-Size-Container{
+                position: absolute;
+                top: 0px;
+                bottom: 0px;
+                left: 0px;
+                right: 0px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="container" class="Full-Size-Container"></div>
+        <script>
+            const max_time_bars = 300;
+            // const max_series_length_ms = 1000*60*5;
+            // const shiftSeries = function(series){
+            //     const lastest_ts = series.xData[series.xData.length-1];
+            //     const cutoff_ts = lastest_ts - max_series_length_ms;
+            //     while(series.xData[0] < cutoff_ts){
+            //         series.removePoint(0);
+            //     }
+            // }
+            const aggregateCandle = function(agg, cur, indx, arr){
+                const val = cur;
+                if(indx === 0){
+                    agg[1] = val[1];
+                }
+                agg[2] = Math.max(agg[2], val[2]);
+                agg[3] = Math.min(agg[3], val[3]);
+                if(indx === arr.length-1){
+                    // agg[0] = val[0];
+                    agg[4] = val[4];
+                }
+                return agg;
+            };
+            const aggregateColumn = function(agg, cur, indx, arr){
+                const val = cur;
+                if(indx === (arr.length-1)){
+                    // agg[0] = val[0];
+                }
+                agg[1] += val[1];
+                return agg;
+            };
+            
+            const subscribeToStreams = function(hc){
+                const ohlc_series = hc.series[0];
+                const volume_series = hc.series[1];
+                const buy_series = hc.series[2];
+                const sell_series = hc.series[3];
+                const hodl_series = hc.series[4];
+                const x_axis = hc.xAxis[0];
+                const ohlc_queue = [];
+                const volume_queue = [];
+                const buy_queue = [];
+                const hodl_queue = [];
+                const sell_queue = [];
+                
+                const socket = new WebSocket('wss://ws-feed.gdax.com');
+                const classify_socket = new WebSocket('ws://localhost:8080');
+                
+
+                // Connection opened
+                socket.addEventListener('open', function (event) {
+                    socket.send(JSON.stringify({
+                        type: 'subscribe',
+                        product_ids: ['btc-usd'],
+                        channels: ['heartbeat', 'ticker']
+                    }));
+
+                    const barTimer = function(){
+                        setTimeout(function(){
+                            const ts = Date.now();
+                            const shift = max_time_bars < ohlc_series.xData.length;
+                            if(ohlc_queue.length){
+                                const ohlc_bar = ohlc_queue.reduce(aggregateCandle, [ts, null, Number.MIN_VALUE, Number.MAX_VALUE, null]);
+                                ohlc_queue.length = 0;
+                                ohlc_series.addPoint(ohlc_bar, true, shift);
+                            }else{
+                                ohlc_series.addPoint([ts, null, null, null, null], true, shift);
+                            }
+                            if(volume_queue.length){
+                                const volume_bar = volume_queue.reduce(aggregateColumn, [ts, 0]);
+                                volume_queue.length = 0;
+                                volume_series.addPoint(volume_bar, true, shift);
+                            }else{
+                                volume_series.addPoint([ts, 0], true, shift);
+                            }
+                            if(buy_queue.length){
+                                const buy_bar = buy_queue.reduce(aggregateColumn, [ts, 0]);
+                                buy_queue.length = 0;
+                                buy_series.addPoint(buy_bar, true, shift);
+                            }else{
+                                buy_series.addPoint([ts, 0], true, shift);
+                            }
+                            if(hodl_queue.length){
+                                const hodl_bar = hodl_queue.reduce(aggregateColumn, [ts, 0]);
+                                hodl_queue.length = 0;
+                                hodl_series.addPoint(hodl_bar, true, shift);
+                            }else{
+                                hodl_series.addPoint([ts, 0], true, shift);
+                            }
+                            if(sell_queue.length){
+                                const sell_bar = sell_queue.reduce(aggregateColumn, [ts, 0]);
+                                sell_queue.length = 0;
+                                sell_series.addPoint(sell_bar, true, shift);
+                            }else{
+                                sell_series.addPoint([ts, 0], true, shift);
+                            }
+
+                            // const extremes = x_axis.getExtremes();
+                            // x_axis.setExtremes(extremes.min, extremes.max, true);
+
+                            barTimer();
+                        }, 1000);
+                    }
+                    barTimer();
+                });
+
+                // Listen for messages
+                socket.addEventListener('message', function (event) {
+                    const data = JSON.parse(event.data);
+                    if(data.type === 'ticker' && data.last_size){
+                        const ts = (new Date(data.time)).getTime(); 
+                        const p = parseFloat(data.price);
+                        const v = parseFloat(data.last_size);
+                        
+                        ohlc_queue.push([
+                            ts,
+                            p,
+                            p,
+                            p,
+                            p
+                        ]);
+                        volume_queue.push([
+                            ts,
+                            v
+                        ]);
+                        // shiftSeries(ohlc_series);
+                        // shiftSeries(volume_series);
+                    }
+                });
+
+                classify_socket.addEventListener('message', function(message){
+                    const data = JSON.parse(message.data);
+                    if(data.result === "FOMO_BUY"){
+                        buy_queue.push([
+                            data.timestamp, 
+                            1
+                        ]);
+                        // shiftSeries(buy_series);
+                    }else if(data.result === 'FOMO_SELL'){
+                        sell_queue.push([
+                            data.timestamp, 
+                            1
+                        ]);
+                        // shiftSeries(sell_series);
+                    }else if(data.result === 'HODL'){
+                        hodl_queue.push([
+                            data.timestamp, 
+                            1
+                        ]);
+                        // shiftSeries(hodl_series);
+                    }
+                }); 
+                
+            }
+            
+            const groupingUnits = [[
+                    'second',
+                    [5] // allowed multiples
+                ],[
+                    'minute',
+                    [1, 5, 15]
+                ],[
+                    'hour',
+                    [1]
+                ]];
+            let selectedButton = null;
+            const clickHandler = function(e) {
+                console.log(this);
+                selectedButton = e;
+            }
+
+            // create the chart
+            Highcharts.stockChart('container', {
+                    // rangeSelector: {
+                    //     selected: 1
+                    // },
+                    plotOptions:{
+                        column:{
+                            grouping: false,
+                            stacking: 'normal',
+                        }
+                    },
+                    // navigator: {
+                    //     enabled: false
+                    // },
+                    scrollbar: {
+                        enabled: false
+                    },
+                    // rangeSelector: {
+                    //     buttons: [{
+                    //         count: 15,
+                    //         type: 'second',
+                    //         text: '15S',
+                    //         events:{
+                    //             click: clickHandler
+                    //         }
+                    //     },{
+                    //         count: 30,
+                    //         type: 'second',
+                    //         text: '30S',
+                    //         events:{
+                    //             click: clickHandler
+                    //         }
+                    //     },{
+                    //         count: 1,
+                    //         type: 'minute',
+                    //         text: '1M',
+                    //         events:{
+                    //             click: clickHandler
+                    //         }
+                    //     },{
+                    //         count: 5,
+                    //         type: 'minute',
+                    //         text: '5M',
+                    //         events:{
+                    //             click: clickHandler
+                    //         }
+                    //     },{
+                    //         count: 15,
+                    //         type: 'minute',
+                    //         text: '15M',
+                    //         events:{
+                    //             click: clickHandler
+                    //         }
+                    //     },{
+                    //         count: 30,
+                    //         type: 'minute',
+                    //         text: '30M',
+                    //         events:{
+                    //             click: clickHandler
+                    //         }
+                    //     }],
+                    //     inputEnabled: false,
+                    //     selected: 2
+                    // },
+                    title: {
+                        text: 'Cryptelligence'
+                    },
+                    yAxis: [{
+                        labels: {
+                            align: 'right',
+                            x: -3
+                        },
+                        title: {
+                            text: 'OHLC'
+                        },
+                        height: '50%',
+                        lineWidth: 2,
+                        resize: {
+                            enabled: true
+                        }
+                    }, {
+                        labels: {
+                            align: 'right',
+                            x: -3
+                        },
+                        title: {
+                            text: 'Volume'
+                        },
+                        top: '50%',
+                        height: '25%',
+                        offset: 0,
+                        lineWidth: 2
+                    },{
+                        labels: {
+                            align: 'right',
+                            x: -3
+                        },
+                        title: {
+                            text: 'Signal'
+                        },
+                        top: '75%',
+                        height: '25%',
+                        offset: 0,
+                        lineWidth: 2
+                    }],
+                    xAxis:{
+                        range: 1000*60*5
+                    },
+                    tooltip: {
+                        split: true
+                    },
+                    series: [{
+                        type: 'candlestick',
+                        name: 'BTC-USD',
+                        data: [],
+                        dataGrouping: {
+                            units: groupingUnits,
+                            forced: true
+                        }
+                    },{
+                        type: 'column',
+                        name: 'Volume',
+                        data: [],
+                        yAxis: 1,
+                        dataGrouping: {
+                            units: groupingUnits,
+                            forced: true
+                        }
+                    },{
+                        type: 'column',
+                        name: 'FOMO_BUY',
+                        color: 'green',
+                        data: [],
+                        yAxis: 2,
+                        dataGrouping: {
+                            units: groupingUnits,
+                            forced: true
+                        }
+                    },{
+                        type: 'column',
+                        name: 'HODL',
+                        color: 'yellow',
+                        data: [],
+                        yAxis: 2,
+                        dataGrouping: {
+                            units: groupingUnits,
+                            forced: true
+                        }
+                    },{
+                        type: 'column',
+                        name: 'FOMO_SELL',
+                        color: 'red',
+                        data: [],
+                        yAxis: 2,
+                        dataGrouping: {
+                            units: groupingUnits,
+                            forced: true
+                        }
+                    }],
+                    chart: {
+                        events: {
+                            load: function () {
+                                subscribeToStreams(this);
+                            }
+                        }
+                    },
+                });
+            // $.getJSON('https://www.highcharts.com/samples/data/jsonp.php?filename=aapl-ohlcv.json&callback=?', );
+        </script>
+    </body>
+</html>

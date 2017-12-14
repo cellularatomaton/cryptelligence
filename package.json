@@ -21,6 +21,7 @@
     "gdax": "github:coinbase/gdax-node",
     "lodash": "^4.17.4",
     "natural": "^0.5.4",
-    "twitter": "^1.7.1"
+    "twitter": "^1.7.1",
+    "ws": "^3.3.2"
   }
 }

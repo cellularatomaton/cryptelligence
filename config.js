@@ -7,9 +7,9 @@ module.exports = {
             filters: ['Bitcoin','bitcoin','BTC','btc'],
             output: 'btc-signals.json',
             dildo_gain: 0.75,
-            flow_gain: 0.25,
+            flow_gain: 0.75,
             time_decay: 60, // Seconds
-            sample_size: 1000
+            sample_size: 10000
         }
     ]
 };

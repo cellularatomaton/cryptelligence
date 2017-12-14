@@ -36,6 +36,7 @@ websocket.on('open', function(){
         class_config.filters,
         function(tweet_error, tweet){
             if(tweet_error){
+                console.log(tweet_error);
                 throw tweet_error;
             }
             trackers.push({
@@ -55,7 +56,8 @@ websocket.on('open', function(){
 });
 
 websocket.on('message', function(data) { 
-    if(data.type === 'ticker'){
+    if(data.type === 'ticker' && data.last_size){
+        // console.log(data);
         utils.logTicker(data);
         trackers.forEach(function(tracker){
             if(!tracker.open){
@@ -65,9 +67,9 @@ websocket.on('message', function(data) {
             tracker.low = tracker.low ? Math.min(tracker.low, data.price) : data.price;
             tracker.close = data.price;
             if(data.side === 'buy'){
-                tracker.buy_volume += data.last_size;
+                tracker.buy_volume += parseFloat(data.last_size);
             }else{
-                tracker.sell_volume += data.last_size;
+                tracker.sell_volume += parseFloat(data.last_size);
             }
             // console.log(`Ticker timestamp: ${data.time} (${utils.getEpochTime(data.time)})`);
             tracker.last_ticker_ts = utils.getEpochTime(data.time);

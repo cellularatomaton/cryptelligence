@@ -13,13 +13,13 @@ const classifier_file = `${config.data_dir}/${classification_config.output}`;
 natural.BayesClassifier.load(classifier_file, null, function(classifier_error, classifier) {
     twitter_client.createTweetStream(
         process.env.TWITTER_SCREEN_NAME, 
-        classification_config.slug,
+        null,
         classification_config.filters,
         function(tweet_error, tweet){
             if(tweet_error){
                 throw tweet_error;
             }
             let result = classifier.classify(tweet.text);
-            utils.logClassResult(tweet, result);
+            utils.logClassResult(tweet.text, result);
         });
 });
